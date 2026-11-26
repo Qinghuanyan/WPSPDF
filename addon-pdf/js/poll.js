@@ -10,7 +10,14 @@ let CMD_BASE = null;
 let pollCount = 0;
 let failStreak = 0;
 let reportedDown = false;
+let STOPPED = false;
 const INST = Date.now().toString(36);
+
+// 关文档/关窗时立刻停轮询、不再发请求：不给宿主拆除页面时添等待
+if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", function () { STOPPED = true; });
+    window.addEventListener("pagehide", function () { STOPPED = true; });
+}
 
 function post(path, obj) {
     try {
@@ -93,8 +100,10 @@ function loop() {
     window.__WPSPDF_LOOPING = true;
 
     function tick() {
+        if (STOPPED) return;
         pollCount++;
         getText("/cmd").then(function (txt) {
+            if (STOPPED) return;
             if (txt === null) {
                 // 引擎不在：只退避，不拉起进程（拉起会卡死 PDF 宿主）
                 failStreak++;

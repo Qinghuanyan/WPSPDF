@@ -15,6 +15,12 @@ WPS 侧入口不变：表格与 PDF 两个窗口都有「PDF转表格」页签�
 
 ## Recent Changes
 
+- 2026-11-27 00:00 **查清「页签不出现」的注册时机与「关闭卡死」归属**。
+  页签只在 WPS **进程启动**时注册一次：引擎没起→无 ribbon.xml→无页签；引擎后起或改过 publish.xml，
+  已在跑的 WPS 不会补注册（同一窗口重开文档也不行，必须退干净重开）。
+  「关闭卡死」A/B 验证：禁用加载项后行为相同 → 是 WPS 留空「WPS Office」窗口，关掉它 1 秒退出，与插件无关。
+  另实测：离线本地目录注册（`jsplugin` + 本地 path）在本机 WPS 不出页签，只能走 http 托管。
+  新增 `tools/check-engine.bat`；`poll.js`/`tp.js` 加 beforeunload/pagehide 清理。
 - 2026-11-26 23:37 **引擎 v1.3.1：修 PDF 卡死与页签时有时无**。
   卡死根因：旧 `poll.js` 在引擎不可达时每 15s 调 `wps.OAAssist.ShellExecute`（WPS 个人版静默拦截，
   同步调用拖死宿主 UI）。已删除自动拉起，改指数退避；删掉 `util.js` 同步 XHR 死代码；循环加单例守卫。

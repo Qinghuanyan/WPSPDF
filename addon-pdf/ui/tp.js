@@ -138,3 +138,6 @@ $('btnGo').onclick = async () => {
 };
 
 init();
+
+// 关窗格时停掉轮询，别给宿主播放中的页面添等待
+window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); });

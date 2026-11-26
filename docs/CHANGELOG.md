@@ -1,5 +1,25 @@
 # CHANGELOG — WPSPDF
 
+## v1.3.2 — 2026-11-27
+
+**把「页签为什么不出现」和「关闭是不是卡死」两件事查到底，并留证据**
+
+- **页签注册时机（实测）**：功能区页签只在 **WPS 进程启动**时注册一次。
+  - 引擎未起 → `ribbon.xml` 取不到 → 无页签（`GET /pdf/ribbon.xml 200` 是唯一判据）；
+  - 引擎后起、或改过 `publish.xml` 之后，**已在运行的 WPS 进程不会补注册**，
+    必须完全退出 WPS（不是只关文档）再开。实测：同一进程里重开文档，`page-loaded` 有、
+    `ribbon.xml` 也 200，但页签仍是旧的「阅读 / 增值服务」；杀掉 WPS 重开 → `阅读 | 增值服务 | PDF转表格`。
+- **「关闭卡死」A/B 结论：与插件无关**。关闭这份 24MB 大 PDF 后进程不退出（界面 `Hung=False`，CPU 增量 0），
+  原因是 WPS 留了一个空的「WPS Office」窗口；**关掉空窗口 → 进程 1s 退出**。
+  禁用加载项（`enable="disable"`）重复同一操作，25s 后进程同样不退出 → 排除插件。
+- **离线本地包注册失败**（记录以免重复尝试）：把 `publish.xml` 写成
+  `jsplugin url="D:/Github/WPSPDF/addon-pdf/"` 本地目录后打开 PDF，页签不出现
+  （`evidence/offline-test-tabrow.png`）。本机 WPS 只认 http 托管的 `jspluginonline`，
+  所以「不依赖引擎也能出页签」这条路在本版本走不通。
+- 插件加固：`poll.js` 的 `beforeunload`/`pagehide` 置 `STOPPED` 并停轮询；`tp.js` `pagehide` 清定时器。
+- 新增 `tools/check-engine.bat` + `tools/check_engine.py`：一键判断引擎是否在线（38731–38734 轮询 `/ping`）。
+- 引擎版本仍 1.3.1（本次只改加载项与工具，服务端未变）。
+
 ## v1.3.1 — 2026-11-26
 
 **修「PDF 窗口卡死」与「页签时有时无」两个线上问题**
