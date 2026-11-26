@@ -344,7 +344,7 @@ def pick_port(preferred: int) -> int:
         return s.getsockname()[1]
 
 
-WPS_IMAGES = {"wpsoffice.exe", "wpspdf.exe", "et.exe", "wpp.exe", "wps.exe"}
+WPS_IMAGES = {"wpspdf.exe", "et.exe", "wpp.exe", "wps.exe"}  # 不含 wpsoffice.exe：那是空壳壳
 
 
 def wps_running() -> bool:
@@ -373,7 +373,7 @@ def wps_running() -> bool:
 def watchdog(server):
     """WPS 还在跑就常驻；WPS 全关后空闲到点退出。"""
     while True:
-        time.sleep(20)
+        time.sleep(5)   # 5s 一跳：WPS 关掉后能尽快退出（配合 idle_timeout=20 约 25s 内消失）
         with JOBS_LOCK:
             running = any(j.get("state") == "running" for j in JOBS.values())
         if running:

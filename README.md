@@ -55,17 +55,30 @@ tools\uninstall.ps1
 安装前状态会记录到 `evidence/install-pre-*.json`，卸载后 `jsaddons` 回到安装前状态。
 **不写注册表、不改 WPS 安装目录、不动用户文件。**
 
-## 启动顺序（页签不出现的两个原因，都实测过）
+## 入口与启停（v1.4：页签本地常驻，引擎按需）
 
-功能区页签**只在 WPS 进程启动那一刻注册一次**，所以：
+**页签不再依赖引擎**。PDF 侧加载项改成官方「离线本地包」形式装进 `jsaddons`：
 
-1. **引擎必须先起来**：`ribbon.xml` 由本地引擎 http 提供，引擎没跑就取不到 → 无页签。
-   先双击桌面 **「PDF转表格·启动引擎」**（或 `tools/start-engine.bat` / `tools/engine-silent.vbs`），
-   用 `tools/check-engine.bat` 确认「在线：版本 1.3.1 …」。
-2. **引擎后起 / 改过加载项后，必须完全退出 WPS**（托盘也退，不是只关文档），再重新打开 PDF。
-   已经在跑的 WPS 进程不会补注册页签——即使后来取到了 `ribbon.xml` 也不会重新加。
+```
+%APPDATA%\kingsoft\wps\jsaddons\WPSPDFPdf_1.0.0\      ← 加载项文件（ribbon.xml / 页面 / 图标）
+publish.xml: <jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version="1.0.0" .../>
+```
+`url` 是**目录名**而不是网址（依据 wpsjs `build.js:163` 的离线安装格式），所以 WPS 从磁盘读
+`ribbon.xml` 与页面 → **引擎不启动也有「PDF转表格」页签**（`evidence/offline-localpkg-tabrow.png`）。
 
-结论：**引擎常驻（开机自启）→ 之后每次打开 PDF 都有页签**。
+**引擎按需启动**（不常驻）：计划任务 `WPSPDF-EngineOnDemand` 每分钟跑一次 `tools/watch_once.py`，
+只有当「WPS 文档进程在跑（`wpspdf/et/wpp/wps`）」且「引擎没在跑」时才拉起引擎，跑完立刻退出。
+引擎自身也不常驻：WPS 文档关掉后按 `.run/idle_timeout`（默认 20 秒）自动退出——
+实测 `idle 22s → shutdown`。
+
+三种启动方式（任选）：
+| 方式 | 命令 |
+|---|---|
+| PDF 右键菜单「PDF 转表格（WPSPDF）」 | 起引擎 + 用 WPS 打开该 PDF |
+| 桌面快捷方式「PDF转表格·启动引擎」 | 只起引擎 |
+| 什么都不做 | WPS 打开 PDF 后 ≤1 分钟，计划任务自动拉起 |
+
+检查引擎状态：双击 `tools\check-engine.bat`。
 
 ## 关闭 PDF 时的现象（与插件无关，已 A/B 验证）
 
@@ -74,18 +87,15 @@ tools\uninstall.ps1
 （`evidence/` 与 CHANGELOG v1.3.2 记录），所以这是 WPS 自身行为，不是插件卡死。
 插件侧另做了 hygiene：`beforeunload`/`pagehide` 时停轮询、不再发请求，不给宿主拆除页面添等待。
 
-## 引擎生命周期（跟随 WPS）
+## 引擎生命周期
 
 - 只监听 `127.0.0.1`，端口 38731 起，被占用自动顺延（加载项按 38731–38734 探测）
-- **生存期跟随 WPS**：只要 `wpsoffice/wpspdf/et/wpp` 任一进程在跑就常驻；
-  WPS 全部关掉后才开始算空闲，再按超时退出（默认 300 秒，`WPSPDF_IDLE_TIMEOUT` / `.run/idle_timeout` 可改，`0`=常驻）
-- **为什么必须这样**：加载项的 `ribbon.xml` / 页面都是本引擎 http 托管的。
-  引擎提前退出 → WPS 再打开 PDF 取不到 `ribbon.xml` → **页签直接不出现**（2026-11-26 实测的「时有时无」就是这个）
-- 开机自启：`tools/autostart.ps1 -Action register`（HKCU Run 跑 `engine-silent.vbs`，静默无黑窗）。
-  **未注册自启时，WPS 先于引擎启动的那次就打不开页签**；可用 `tools/start-engine.bat` 手工补
-- 常驻时占用约 51 MB 内存、空闲 CPU ≈0
-- 加载项**不再**尝试用 `wps.OAAssist.ShellExecute` 拉起引擎：WPS 个人版静默拦截该调用，
-  在 PDF 宿主里反复调用会把窗口拖到卡死（见关键技术点 11）
+- **不常驻**：只由计划任务/快捷方式按需拉起；`.run/idle_timeout`（默认 20 秒）到点自行退出。
+  判活只看**文档进程**（`wpspdf/et/wpp/wps`），不含 `wpsoffice.exe`——它关文档后会留空壳窗口，
+  用它会把这引擎焊死
+- 开机自启已**取消**（`tools/autostart.ps1 -Action unregister`），因为页签不再需要引擎先起
+- 常驻期间占用约 51 MB 内存、空闲 CPU ≈0
+- 加载项**不会**用 `wps.OAAssist.ShellExecute` 拉起引擎：三条通道实测全部无效，见关键技术点 11、13
 
 ## 关键技术点（都是踩过的坑）
 
@@ -107,6 +117,15 @@ tools\uninstall.ps1
     页面改为「失败只退避、不拉起进程」，并且**不要用同步 XHR**（`xhr.open(...,false)` 在 CEF 后台页会被拦）。
 12. **`增值服务` 是 WPS 自带页签**，第三方加载项无法往里插按钮；只能并列一个自己的页签
     （实测页签行为 `阅读 | 增值服务 | PDF转表格`）。
+13. **加载项页面无法启动进程**（2026-11-27 在活的 PDF 宿主里逐条实测，不是猜）：
+    - `wps.OAAssist.ShellExecute(...)` → 返回正常、**不执行**（用写文件验证，文件没出现）
+    - `Application.CreateObject("WScript.Shell")` → `Load dll fail! Please check the dll path.`
+    - `wps.CreateObject(...)` → 同上
+    - `wps.OAAssist.CoCreateInstance("WScript.Shell")` → `WScript.Shell can not create`
+    所以「在 WPS 里点按钮启动引擎」这条路在本版本 WPS 上封死，按需启动只能放在 Windows 侧。
+14. **离线本地包格式**（让页签不依赖服务）：`publish.xml` 里
+    `<jsplugin url="<Name>_<Version>" version="<Version>"/>`，`url` 是 `jsaddons` 下的**目录名**；
+    目录内容就是加载项文件。见 wpsjs `src/lib/build.js:163` 的 `CreatePublishXml()`。
 
 ## 已知限制
 

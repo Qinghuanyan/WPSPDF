@@ -1,5 +1,37 @@
 # CHANGELOG — WPSPDF
 
+## v1.4.0 — 2026-11-27
+
+**架构调整：页签本地常驻 + 引擎按需启动（不再常驻、不再开机自启）**
+
+用户要求：引擎「按需启用」，不要一直常驻，WPS 关了引擎就关。
+
+- **页签脱离引擎**：PDF 侧加载项改成官方「离线本地包」形式——
+  `jsaddons\WPSPDFPdf_1.0.0\` + `publish.xml` 里
+  `<jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version="1.0.0"/>`。
+  `url` 是**目录名**不是网址（依据 wpsjs `src/lib/build.js:163`）。
+  **实测：引擎完全停止（38731 无响应）时，页签仍出现**（`evidence/offline-localpkg-tabrow.png`）。
+  此前试过的两种写法都失败并已记录：本地 Windows 路径（`jsplugin url="D:/..."`）、
+  `file:///`（`evidence/offline-test-tabrow.png`、`file-test-tabrow.png`）。
+- **引擎按需启动**：新增计划任务 `WPSPDF-EngineOnDemand`（每 1 分钟跑 `tools/watch_once.py`，
+  几百毫秒即退出，不常驻）：仅当 WPS 文档进程在跑且引擎不在时才拉起引擎。
+  实测：WPS 在跑、引擎停 → 任务自动拉起（`在线：版本 1.3.1 … 已运行 6s`）。
+- **引擎不常驻**：判活口径收紧为**文档进程**（`wpspdf/et/wpp/wps`），剔除 `wpsoffice.exe`
+  （关文档后它会留空壳窗口，用它会把这引擎焊死）。`.run/idle_timeout` 设 **20 秒**，
+  watchdog 轮询 20s→5s。实测：WPS 关掉后 `idle 22s → shutdown`，端口释放。
+- **取消开机自启**（`autostart.ps1 -Action unregister`）——页签不再需要引擎先起。
+- 新增：
+  - `tools/install-offline.ps1`（离线本地包 register/unregister/status，自动合并 `publish.xml`）
+  - `tools/register-watchdog-task.ps1`（计划任务 register/unregister/status）
+  - `tools/register-pdf-menu.ps1` + `tools/open-with-wpspdf.bat` + `tools/open_pdf.py`
+    （PDF 右键菜单：起引擎 → 用 WPS 打开该 PDF）
+  - `tools/watch_once.py`、`tools/check-engine.bat` + `tools/check_engine.py`
+  - `一键安装.bat` / `一键卸载.bat` 改为编排上述四步
+- **「在 WPS 里点按钮起引擎」实测封死**（活页面逐条验证）：`ShellExecute` 返回成功但不执行、
+  `Application/wps.CreateObject` 报 `Load dll fail`、`CoCreateInstance` 报 `cannot create`。
+- 坑记录：`$action` 变量与 PowerShell 参数 `-Action` 撞名导致 `New-ScheduledTaskAction` 注册失败；
+  XmlElement 的 `.Name` 在 PowerShell 里被同名属性覆盖，写 `publish.xml` 必须用 `.LocalName`。
+
 ## v1.3.2 — 2026-11-27
 
 **把「页签为什么不出现」和「关闭是不是卡死」两件事查到底，并留证据**

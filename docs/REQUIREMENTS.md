@@ -116,3 +116,18 @@
 - 根因：旧 `poll.js` 每 15s 调 `wps.OAAssist.ShellExecute`（WPS 个人版静默拦截，同步调用拖死 UI）；
   `util.js` 另有同步 XHR 死代码。
 - 状态：**done**（删除自动拉起 + 指数退避 + 循环单例 + 去同步 XHR）
+
+## REQ-019 — 引擎按需启动，不常驻（用户 2026-11-27）
+- 时间：2026-11-27
+- 描述：引擎不要一直常驻，也不要开机自启；按需启动，WPS 关了引擎就关。
+- 验收：页签在引擎未启动时也出现；WPS 打开后 ≤1 分钟引擎自动就绪；WPS 文档关闭后引擎 ≤30 秒退出。
+- 状态：**done**（离线本地包 + 计划任务 `WPSPDF-EngineOnDemand`；实测 `idle 22s → shutdown`）
+
+## REQ-020 — 在 WPS 界面里点按钮启动引擎
+- 时间：2026-11-27
+- 描述：希望在 WPS 页签/窗格里点一下就把引擎拉起。
+- 结论：**此 WPS 版本封死**。活页面逐条实测：`wps.OAAssist.ShellExecute` 返回成功但不执行；
+  `Application.CreateObject` / `wps.CreateObject` 报 `Load dll fail! Please check the dll path.`；
+  `wps.OAAssist.CoCreateInstance("WScript.Shell")` 报 `can not create`。
+- 替代：Windows 侧按需入口（计划任务 / PDF 右键菜单 / 桌面快捷方式），均不常驻。
+- 状态：**dropped（技术上不可达，已用替代方案满足意图）**
