@@ -1,5 +1,13 @@
 # CHANGELOG — WPSPDF
 
+## v1.2.0 — 2026-11-26
+
+- 引擎：`/job` 增加 `pages_total/pages_done/elapsed_s/eta_s/percent`；新增 `/jobs`、`/cmd`、`/evalcode`（devmode 下）。
+- 引擎生命周期：`WPSPDF_IDLE_TIMEOUT` 默认 0（常驻）；`tools/engine-silent.vbs` 静默启动；`stop-engine.bat` 停止。
+- 安装：publish.xml 写 et + pdf 两条在线条目；创建桌面/开始菜单「启动引擎 / 停止引擎」快捷方式；注册 HKCU Run 自启（`-NoAutostart` 可跳过）。
+- 前端：`main.js` 改用 onload 链式加载并带 `?v=` 缓存击穿（`document.write` 在动态脚本中会清空页面）；窗格复用不再重建；进度以引擎为准，重开窗格自动接管。
+- 实测结论：WPS 个人版拦截加载项启动外部进程（ShellExecute 无效、CoCreateInstance 不可用）。
+
 ## v1.1.1 — 2026-11-26
 
 - 功能区图标：`addon-pdf/images/{convert,batch,check}.png`（32×32 实心笔画），`GetImage` 返回相对路径，`ribbon.xml` 用 `size="large"`。

@@ -1,81 +1,73 @@
-<#
-  WPSPDF 加载项卸载脚本（完整回退）
-  只删除本工具创建的东西：
-    jsaddons\WPSPDF_1.0.0\
-    jsaddons\publish.xml 中的 WPSPDF 条目（若因此变空则删文件）
-    jsaddons\.wpspdf-installed
-    jsaddons\（仅当它是本工具创建且已空）
+﻿<#
+  WPSPDF 卸载脚本（完整回退）
+  删除：
+    publish.xml 里 WPSPDF* 条目（若因此为空则删文件）
+    %APPDATA%\kingsoft\wps\jsaddons\WPSPDF_1.0.0（历史离线形态遗留）
+    .wpspdf-installed 标记
+    桌面/开始菜单快捷方式
+    HKCU Run 自启项
+    jsaddons 目录（仅当已空）
+  不删：引擎源码、output 产物
 #>
 [CmdletBinding()]
-param(
-    [string]$AddonName = 'WPSPDF',
-    [string]$Version = '1.0.0'
-)
-
+param()
 $ErrorActionPreference = 'Stop'
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
-$AddonsRoot  = Join-Path $env:APPDATA 'kingsoft\wps\jsaddons'
-$TargetDir   = Join-Path $AddonsRoot ("{0}_{1}" -f $AddonName, $Version)
-$PublishXml  = Join-Path $AddonsRoot 'publish.xml'
-$Marker      = Join-Path $AddonsRoot '.wpspdf-installed'
+$Root = Split-Path -Parent $PSScriptRoot
+$JsAddons = Join-Path $env:APPDATA 'kingsoft\wps\jsaddons'
+$PublishXml = Join-Path $JsAddons 'publish.xml'
+$Marker = Join-Path $JsAddons '.wpspdf-installed'
 
-function Write-Step($msg) { Write-Host "  · $msg" -ForegroundColor Cyan }
+function Step($m) { Write-Host "  · $m" -ForegroundColor Cyan }
+Write-Host "== WPSPDF 卸载 ==" -ForegroundColor Green
 
-Write-Host "== WPSPDF 加载项卸载 ==" -ForegroundColor Green
+# 1. 停引擎
+try { Invoke-WebRequest 'http://127.0.0.1:38731/shutdown' -UseBasicParsing -TimeoutSec 2 | Out-Null; Step "已请求引擎退出" } catch { Step "引擎未运行" }
 
-# 安全断言：目标必须在 jsaddons 之下，且名字带前缀
-if ($TargetDir -notlike "$AddonsRoot\*") { throw "路径越界，已中止: $TargetDir" }
-if ((Split-Path $TargetDir -Leaf) -notlike "$AddonName`_*") { throw "目录名不匹配，已中止: $TargetDir" }
-
-# ── 1. 删除加载项目录 ─────────────────────────────────────────
-if (Test-Path $TargetDir) {
-    Remove-Item $TargetDir -Recurse -Force
-    Write-Step "已删除 $TargetDir"
-} else {
-    Write-Step "目录不存在，跳过: $TargetDir"
-}
-
-# ── 2. 清理 publish.xml 中的条目 ───────────────────────────────
-$createdByUs = $false
-if (Test-Path $Marker) {
-    try { $createdByUs = (Get-Content $Marker -Raw -Encoding UTF8 | ConvertFrom-Json).created_dir } catch {}
-}
-
+# 2. 清理 publish.xml
 if (Test-Path $PublishXml) {
     try {
         [xml]$doc = Get-Content $PublishXml -Raw -Encoding UTF8
         $root = $doc.DocumentElement
-        $mine = @($root.jsplugin | Where-Object { $_.name -eq $AddonName })
+        $mine = @()
+        $mine += @($root.jspluginonline | Where-Object { $_.name -like 'WPSPDF*' })
+        $mine += @($root.jsplugin | Where-Object { $_.name -like 'WPSPDF*' })
         foreach ($n in $mine) { [void]$root.RemoveChild($n) }
-        $remain = @($root.jsplugin | Where-Object { $_ -ne $null })
-        if ($remain.Count -eq 0) {
+        $left = @($root.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })
+        if ($left.Count -eq 0) {
             Remove-Item $PublishXml -Force
-            Write-Step "publish.xml 条目已清空 → 删除文件（无条目即无意义）"
+            Step "publish.xml 已无条目 → 删除文件"
         } else {
             $doc.Save($PublishXml)
-            Write-Step ("publish.xml 保留，剩余条目 {0} 个" -f $remain.Count)
+            Step ("publish.xml 保留，剩余条目 {0} 个" -f $left.Count)
         }
     } catch {
-        Write-Host "  ! publish.xml 解析失败，未改动（请检查备份 evidence\publish.xml.bak-*）" -ForegroundColor Yellow
+        Write-Host "  ! publish.xml 解析失败，未改动（备份在 evidence\publish.xml.bak-*）" -ForegroundColor Yellow
     }
 }
 
-# ── 3. 清理标记与空目录 ───────────────────────────────────────
-if (Test-Path $Marker) { Remove-Item $Marker -Force; Write-Step "已删除标记文件" }
+# 3. 历史离线目录
+foreach ($d in @(Get-ChildItem $JsAddons -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'WPSPDF_*' })) {
+    if ($d.FullName -like "$JsAddons\*") { Remove-Item $d.FullName -Recurse -Force; Step "已删除 $($d.Name)" }
+}
+if (Test-Path $Marker) { Remove-Item $Marker -Force; Step "已删除标记文件" }
 
-if (Test-Path $AddonsRoot) {
-    $left = @(Get-ChildItem $AddonsRoot -Force)
-    if ($left.Count -eq 0) {
-        Remove-Item $AddonsRoot -Force
-        Write-Step "jsaddons 目录已空 → 删除（空目录对 WPS 无用途）"
-    } else {
-        Write-Step ("jsaddons 仍有 {0} 项，保留" -f $left.Count)
+# 4. 快捷方式 + 自启
+$wsh = New-Object -ComObject WScript.Shell
+foreach ($n in @('PDF转表格·启动引擎', 'PDF转表格·停止引擎')) {
+    foreach ($d in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
+        $p = Join-Path $d ($n + '.lnk')
+        if (Test-Path $p) { Remove-Item $p -Force; Step "已删除快捷方式 $n" }
     }
+}
+& (Join-Path $PSScriptRoot 'autostart.ps1') -Action unregister
+
+# 5. 空目录
+if (Test-Path $JsAddons) {
+    $left = @(Get-ChildItem $JsAddons -Force)
+    if ($left.Count -eq 0) { Remove-Item $JsAddons -Force; Step "jsaddons 已空 → 删除" }
+    else { Step ("jsaddons 仍有 {0} 项，保留" -f $left.Count) }
 }
 
 Write-Host ""
-Write-Host "卸载完成。WPS 重启后「PDF 工具」选项卡消失。" -ForegroundColor Green
-Write-Host "  当前状态:" -ForegroundColor DarkGray
-Write-Host ("    jsaddons 存在: {0}" -f (Test-Path $AddonsRoot)) -ForegroundColor DarkGray
-Write-Host ("    publish.xml 存在: {0}" -f (Test-Path $PublishXml)) -ForegroundColor DarkGray
-Write-Host ("    加载项目录存在: {0}" -f (Test-Path $TargetDir)) -ForegroundColor DarkGray
+Write-Host "卸载完成。WPS 重启后页签消失。" -ForegroundColor Green
+Write-Host ("  jsaddons: {0}   publish.xml: {1}" -f (Test-Path $JsAddons), (Test-Path $PublishXml)) -ForegroundColor DarkGray

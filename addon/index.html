@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html>
     <meta charset="utf-8">
-    <script type="text/javascript" src="./main.js"></script>
+    <script>
+      // 动态带版本号加载 main.js，避免 WPS CEF 缓存旧脚本
+      (function () {
+        var s = document.createElement("script");
+        s.src = "main.js?v=" + Date.now();
+        (document.head || document.documentElement).appendChild(s);
+      })();
+    </script>
 </html>
-<!-- WPSPDF 加载项入口：WPS 启动时加载本文件 -->

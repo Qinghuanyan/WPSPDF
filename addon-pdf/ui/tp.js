@@ -93,7 +93,7 @@ async function tick() {
 async function init() {
     const ok = await probe();
     $('dot').className = 'dot ' + (ok ? 'ok' : 'bad');
-    $('state').textContent = ok ? '引擎在线' : '引擎未启动（点「开始转换」会自动拉起）';
+    $('state').textContent = ok ? '引擎在线' : '引擎未启动 · 双击桌面「PDF转表格·启动引擎」';
     const path = pdfPathSafe();
     $('pdfPath').textContent = '当前 PDF：' + (path || '—（取不到路径）');
     if (ok) { log(`ping ok ${base}`); tick(); }
@@ -102,7 +102,7 @@ async function init() {
 $('btnGo').onclick = async () => {
     if (!base) {
         const ok = await probe();
-        if (!ok) { $('state').textContent = '引擎未启动，正在尝试拉起…'; log('引擎未启动'); return; }
+        if (!ok) { $('state').textContent = '引擎未启动 · 双击桌面「PDF转表格·启动引擎」'; log('引擎未启动'); return; }
     }
     const path = pdfPathSafe();
     if (!path) { $('hint').textContent = '取不到当前 PDF 路径'; return; }

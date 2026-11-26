@@ -12,11 +12,9 @@
 
 ## Recent Changes
 
-- 2026-11-26 16:25：图标问题定位并修复。用 4 色象限标定图实测：**WPS 没裁切，是把这个 32px 图缩到约 16px 显示**；原先的细线条 SVG/线稿缩到 16px 基本看不见，所以像"只剩左上角"。改为实心粗笔画 PNG（`images/{convert,batch,check}.png`，相对路径 + `size="large"`）后渲染正常（`evidence/icons-final-b.png`）。
-  同时新增 `/cmd activatetab`（`Application.ribbonUI.ActivateTab`）用于无鼠标切换页签验证。
-
-- 2026-11-26 16:06：修任务窗格白屏——`CreateTaskPane` 必须传**带 scheme+host 的绝对 URL**（原来传 `/pdf/ui/...` 站内路径）。
-  同时把 `convertCurrent()` 从同步 XHR 改为 `fetch`：CEF 后台页会拦同步 XHR，这是先前「点了没反应」的真因。
-- 2026-11-26 16:03：加 `/cmd` 服务端驱动通道（`GET /cmd` 取指令、`POST /cmd` 下发、`POST /log` 回报），用于无鼠标验证。
-- 2026-11-26 15:55：PDF 页签达成（`type="pdf"` 独立包）。
-
+- 2026-11-26 17:10：引擎 v1.2 落地：`/job` 返回页数与 ETA、`/jobs`、`/cmd` 通道、常驻模式（`IDLE_TIMEOUT=0`）；
+  安装脚本改为在线双条目（et+pdf）+ 快捷方式 + 开机自启，卸载脚本同步清理。
+- 2026-11-26 17:05：查明**WPS 个人版拦截加载项起进程**（ShellExecute 返回 OK 无效果，CoCreateInstance 报 can not create），
+  因此改为「常驻引擎 + 桌面快捷方式」，不再尝试从页签拉起进程。
+- 2026-11-26 17:00：修 CEF 缓存问题——`main.js` 里 `document.write` 在动态脚本中会清空文档，改为 `onload` 链式插入并带 `?v=` 版本号；
+  此前改了 JS 不生效、指令被旧实例吞掉，根因都在这里。

@@ -53,3 +53,22 @@
 - 验收：`/cmd` 下发的 `selftest` / `convert` / `taskpane` 均能在加载项内执行并回报 `/log`。
 - 状态：**done**（`/cmd` 通道实测通过）
 
+
+## REQ-010 — 进度显示预计剩余时间
+- 时间：2026-11-26
+- 描述：转换时显示「第 X / Y 页 · 预计剩余 mm:ss」，ETA 由已用时间 ÷ 已完成页数推算。
+- 验收：`GET /job` 返回 `pages_total/pages_done/elapsed_s/eta_s/percent`；窗格展示上述文案。
+- 状态：active（引擎字段已实测返回）
+
+## REQ-011 — 转换进度不因切换页面丢失
+- 时间：2026-11-26
+- 描述：切到别的功能/关掉窗格再回来，进度要能接上；进度状态以引擎为准，页面只是视图。
+- 验收：窗格打开时 `GET /job` 自动接管运行中的任务；`openPane()` 复用已有窗格不重建。
+- 状态：active
+
+## REQ-012 — 引擎生命周期：不拖慢 WPS 启动
+- 时间：2026-11-26
+- 描述：引擎不随 WPS 启动而拉起（会拖慢启动）；改为常驻 + 快捷方式/开机自启，空闲不占 CPU。
+- 实测约束：WPS 个人版**拦截加载项启动外部进程**——`wps.OAAssist.ShellExecute` 四种形式均返回 OK 但不执行；`CoCreateInstance("WScript.Shell")` 报 `can not create`。故“页签里点按钮起进程”不可行。
+- 落地：`tools/engine-silent.vbs`（静默启动）+ 桌面/开始菜单快捷方式 + HKCU Run 自启 + `stop-engine.bat`。
+- 状态：done

@@ -36,7 +36,7 @@ STATIC_ROOTS = {
     "/pdf/": ROOT / "addon-pdf",
     "/images/": ROOT / "addon-pdf" / "images",
 }
-IDLE_TIMEOUT = float(os.environ.get("WPSPDF_IDLE_TIMEOUT", "600"))  # 秒；无请求且无任务则退出
+IDLE_TIMEOUT = float(os.environ.get("WPSPDF_IDLE_TIMEOUT", "0"))  # 秒；0 = 常驻不退出
 
 START_TS = time.time()
 JOBS: dict[str, dict] = {}
@@ -118,7 +118,7 @@ def job_view(jid: str) -> dict:
             j["eta_s"] = int(round(per * max(0, total - done))) if total else None
             j["per_page_s"] = round(per, 1)
         else:
-            j["eta_s"] = int(round(2.5 * total)) if total else None
+            j["eta_s"] = int(round(8.0 * total)) if total else None
         if total:
             j["percent"] = round(min(99.0, 100.0 * done / total), 1)
     else:
@@ -231,6 +231,12 @@ class Handler(BaseHTTPRequestHandler):
             with JOBS_LOCK:
                 item = CMD_QUEUE.pop(0) if CMD_QUEUE else {"cmd": None}
             self._json(200, item)
+        elif p == "/evalcode":
+            if not (RUNDIR / "devmode").exists():
+                self._json(403, {"ok": False, "error": "devmode off"})
+            else:
+                f = RUNDIR / "evalcode.js"
+                self._text(f.read_text("utf-8", errors="replace") if f.exists() else "")
         elif p == "/addinlog":
             f = RUNDIR / "addin.log"
             self._text(f.read_text("utf-8", errors="replace")[-6000:] if f.exists() else "")
@@ -321,6 +327,8 @@ def watchdog(server):
         with JOBS_LOCK:
             running = any(j.get("state") == "running" for j in JOBS.values())
         if running:
+            continue
+        if IDLE_TIMEOUT <= 0:
             continue
         if time.time() - LAST_SEEN > IDLE_TIMEOUT:
             try:

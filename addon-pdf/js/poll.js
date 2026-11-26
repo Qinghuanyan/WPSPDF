@@ -4,6 +4,7 @@ const CMD_PORTS = [38731, 38732, 38733, 38734];
 const LAUNCHER = "D:\\Github\\WPSPDF\\tools\\engine-silent.vbs";
 let CMD_BASE = null;
 let pollCount = 0;
+const INST = Date.now().toString(36);
 let lastLaunch = 0;
 let launched = 0;
 
@@ -16,7 +17,7 @@ function post(path, obj) {
     } catch (e) { }
 }
 
-function report(obj) { post("/log", obj); }
+function report(obj) { obj.inst = INST; post("/log", obj); }
 
 function launchEngine() {
     const now = Date.now();
@@ -106,6 +107,19 @@ function loop() {
                     try { info.appOA = (typeof Application !== "undefined" && Application && Application.OAAssist) ? "yes" : "no"; } catch (e) { info.appOA = "ERR:" + e.message; }
                     try { info.appKeys = Object.keys(Application).slice(0, 25).join(","); } catch (e) { info.appKeys = "ERR:" + e.message; }
                     report({ ev: "jsdiag", info: info });
+                }
+                else if (cmd === "eval") {
+                    fetch((CMD_BASE || ("http://127.0.0.1:" + CMD_PORTS[0])) + "/evalcode", { cache: "no-store" })
+                        .then(function (r) { return r.text(); })
+                        .then(function (code) {
+                            try {
+                                var out = eval(code);
+                                report({ ev: "eval-ok", out: String(out) });
+                            } catch (e) {
+                                report({ ev: "eval-err", err: String(e && e.message ? e.message : e) });
+                            }
+                        })
+                        .catch(function (e) { report({ ev: "eval-fetch-err", err: String(e) }); });
                 }
                 else if (cmd === "jsver") { report({ ev: "jsver", ver: "1.2.0" }); }
             }
