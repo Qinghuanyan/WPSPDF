@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PDF 转表格</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1c1c1e; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#1a6dd6; --ok:#16a34a; --bad:#dc2626; --warn:#d97706;
+    --card:#fafafa; --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1b1b1d; --fg:#e8e8ea; --muted:#9ca3af; --line:#2f2f33; --card:#232326; --accent:#4d9bf5; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:13px/1.55 "Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif;
+    padding:14px; display:flex; flex-direction:column; gap:12px;
+  }
+  h1{font-size:14px;margin:0;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:12px;margin:2px 0 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+  .row{display:flex;align-items:center;gap:8px}
+  .row+.row{margin-top:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.warn{background:var(--warn)}
+  .grow{flex:1;min-width:0}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted);
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  button{
+    font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--line);
+    background:var(--bg);color:var(--fg);cursor:pointer;width:100%;text-align:center;
+  }
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px}
+  .sep{height:1px;background:var(--line);margin:10px 0}
+  .badge{font-size:11px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  #log{white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:11px;
+       color:var(--muted);max-height:120px;overflow:auto}
+  footer{margin-top:auto;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+  <div>
+    <h1>PDF 转表格</h1>
+    <p class="sub">把文字已转曲、搜不到的 PDF，还原成可筛选的表格</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <span class="dot" id="dot"></span>
+      <span class="grow" id="engineText">正在探测本地引擎…</span>
+      <span class="badge" id="ver">—</span>
+    </div>
+    <div class="mono" id="engineUrl">—</div>
+    <div class="sep"></div>
+    <button id="btnCheck">重新探测</button>
+  </div>
+
+  <div class="card">
+    <button class="primary" id="btnPick" disabled>选择 PDF 并转换</button>
+    <div class="row" style="margin-top:8px">
+      <span class="hint" id="pickHint">P1 阶段接入（当前仅通道自检）</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hint" style="margin-bottom:6px">诊断日志</div>
+    <div id="log">（空）</div>
+  </div>
+
+  <footer>WPSPDF 1.0.0 · P0 骨架 · 回退见 tools\uninstall.ps1</footer>
+
+<script>
+const PORTS = [38731, 38732, 38733, 38734];
+let base = null;
+const $ = id => document.getElementById(id);
+
+function log(msg){
+  const el = $('log');
+  const t = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  el.textContent = (el.textContent === '（空）' ? '' : el.textContent + '\n') + `[${t}] ${msg}`;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function probe(port, ms){
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms || 1200);
+  try{
+    const res = await fetch(`http://127.0.0.1:${port}/ping`, {signal: ctl.signal, cache:'no-store'});
+    clearTimeout(timer);
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ clearTimeout(timer); return null; }
+}
+
+async function check(){
+  $('dot').className = 'dot warn';
+  $('engineText').textContent = '正在探测本地引擎…';
+  $('engineUrl').textContent = '—';
+  for(const p of PORTS){
+    const info = await probe(p, 900);
+    if(info && info.ok){
+      base = `http://127.0.0.1:${p}`;
+      $('dot').className = 'dot ok';
+      $('engineText').textContent = '引擎在线';
+      $('ver').textContent = info.version || '—';
+      $('engineUrl').textContent = base;
+      $('btnPick').disabled = false;
+      $('pickHint').textContent = 'P1 阶段接入（通道已通）';
+      log(`ping 成功 port=${p} version=${info.version}`);
+      return true;
+    }
+  }
+  $('dot').className = 'dot bad';
+  $('engineText').textContent = '引擎未启动';
+  $('engineUrl').textContent = '请运行 tools\\start-engine.bat';
+  $('ver').textContent = '—';
+  $('btnPick').disabled = true;
+  log('四个端口均无响应');
+  return false;
+}
+
+$('btnCheck').onclick = check;
+$('btnPick').onclick = async () => {
+  if(!base) return;
+  try{
+    const res = await fetch(`${base}/convert`, {method:'POST'});
+    const data = await res.json();
+    log(`/convert → ${res.status} ${JSON.stringify(data)}`);
+  }catch(e){ log('/convert 失败: ' + e.message); }
+};
+
+check();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "WPSPDF",
+  "version": "1.0.0",
+  "addonType": "et",
+  "description": "WPS 表格加载项：PDF 表格 → xlsx 还原器入口",
+  "private": true
+}

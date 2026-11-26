@@ -1,0 +1,16 @@
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="OnAddinLoad">
+    <ribbon startFromScratch="false">
+        <tabs>
+            <tab id="tabWpsPdf" label="PDF转表格">
+                <group id="grpConvert" label="PDF → 表格">
+                    <button id="btnConvert" label="PDF 转表格" onAction="OnAction" getImage="GetImage" size="large" visible="true" enabled="true"/>
+                    <button id="btnBatch" label="批量转换" onAction="OnAction" getImage="GetImage" size="large" visible="true" enabled="true"/>
+                </group>
+                <group id="grpEngine" label="引擎">
+                    <button id="btnSelfCheck" label="引擎自检" onAction="OnAction" getImage="GetImage" size="large" visible="true" enabled="true"/>
+                    <button id="btnAbout" label="关于" onAction="OnAction" getImage="GetImage" size="large" visible="true" enabled="true"/>
+                </group>
+            </tab>
+        </tabs>
+    </ribbon>
+</customUI>

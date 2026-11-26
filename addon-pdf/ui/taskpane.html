@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PDF 转表格</title>
+<style>
+  :root{ --bg:#fff; --fg:#1c1c1e; --muted:#6b7280; --line:#e5e7eb; --accent:#1a6dd6; --ok:#16a34a; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#1b1b1d; --fg:#e8e8ea; --muted:#9ca3af; --line:#2f2f33; --accent:#4d9bf5; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:14px;background:var(--bg);color:var(--fg);
+       font:13px/1.55 "Microsoft YaHei",system-ui,sans-serif;display:flex;flex-direction:column;gap:12px}
+  h1{font-size:14px;margin:0}
+  .sub{color:var(--muted);font-size:12px;margin:2px 0 0}
+  .card{border:1px solid var(--line);border-radius:10px;padding:12px;background:transparent}
+  .row{display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+  .grow{flex:1;min-width:0}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--muted);
+        word-break:break-all;max-height:54px;overflow:auto}
+  button{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--line);
+         background:var(--bg);color:var(--fg);cursor:pointer;width:100%}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+  #barIn{height:100%;width:0;background:var(--accent);transition:width .3s}
+  #log{white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:11px;
+       color:var(--muted);max-height:150px;overflow:auto}
+</style>
+</head>
+<body>
+  <div>
+    <h1>PDF 转表格</h1>
+    <p class="sub">把文字转曲的 PDF 还原成可筛选的 WPS 表格</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <span class="dot" id="dot"></span>
+      <span class="grow" id="state">正在检测引擎…</span>
+    </div>
+    <div class="mono" id="pdfPath">当前 PDF：—</div>
+  </div>
+
+  <div class="card">
+    <button class="primary" id="btnGo" disabled>开始转换</button>
+    <div style="margin-top:10px"><div id="bar"><div id="barIn"></div></div></div>
+    <div class="mono" id="hint" style="margin-top:6px">—</div>
+  </div>
+
+  <div class="card">
+    <div class="sub" style="margin-bottom:6px">日志</div>
+    <div id="log">（空）</div>
+  </div>
+
+<script src="tp.js"></script>
+</body>
+</html>

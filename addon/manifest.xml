@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JsPlugin>
+  <ApiVersion>1.0.0</ApiVersion>
+  <Name>WPSPDF</Name>
+  <Description>将文字转曲的 PDF 表格还原为 WPS 表格</Description>
+  <Functions>
+    <Uri>/functions.json</Uri>
+    <Namespace>WPSPDF</Namespace>
+  </Functions>
+</JsPlugin>

@@ -1,0 +1,20 @@
+== baseline @ 2026-11-26 15:17:24 ==
+-- jsaddons exists?
+ls: cannot access 'C:\Users\Lenovo\AppData\Roaming/kingsoft/wps/jsaddons': No such file or directory
+-- addons dir:
+total 0
+drwxr-xr-x 1 qinghuanyan 197121 0 Sep 14 01:13 .
+drwxr-xr-x 1 qinghuanyan 197121 0 Sep 14 01:13 ..
+drwxr-xr-x 1 qinghuanyan 197121 0 Sep 14 01:13 data
+drwxr-xr-x 1 qinghuanyan 197121 0 Sep 14 01:13 listV2
+-- addons/data:
+total 4
+drwxr-xr-x 1 qinghuanyan 197121 0 Sep 14 01:13 .
+drwxr-xr-x 1 qinghuanyan 197121 0 Sep 14 01:13 ..
+drwxr-xr-x 1 qinghuanyan 197121 0 Nov 25 16:59 win-i386
+-- WPS install (read-only, we never write here):
+283
+-- HKCU Kingsoft Run keys:
+  (no wps run entry)
+-- processes:
+wpscloudsvr.exe              34208 Console                    1      3,596 K
