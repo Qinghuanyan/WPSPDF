@@ -46,6 +46,14 @@ function Write-Entries($entries) {
 switch ($Action) {
     'register' {
         if (-not (Test-Path $Src)) { throw "源目录不存在：$Src" }
+
+        # WPS 运行中覆盖包目录 → WPS 会弹「加载项 "WPSPDFPdf" 已经被修改，是否…」并扣住页签。
+        # 实测（2026-11-27）因此页签消失，所以这里强制要求先退干净。
+        $running = @(Get-Process -Name wpspdf, wpsoffice, et, wpp -ErrorAction SilentlyContinue)
+        if ($running.Count -gt 0) {
+            throw "WPS 正在运行（$($running[0].ProcessName) 等 $($running.Count) 个进程）。请先完全退出 WPS 再安装/更新离线包，否则 WPS 会提示「加载项已被修改」并扣住页签。"
+        }
+
         New-Item -ItemType Directory -Force -Path $JsAddons | Out-Null
         if (Test-Path $PkgDir) { Remove-Item -Recurse -Force $PkgDir }
         Copy-Item -Recurse -Force $Src $PkgDir

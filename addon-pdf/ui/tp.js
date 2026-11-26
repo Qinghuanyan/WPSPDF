@@ -110,17 +110,81 @@ async function tick() {
 
 async function init() {
     const ok = await probe();
-    $('dot').className = 'dot ' + (ok ? 'ok' : 'bad');
-    $('state').textContent = ok ? '引擎在线' : '引擎未启动 · 双击桌面「PDF转表格·启动引擎」';
+    setOnline(ok);
     const path = pdfPathSafe();
     $('pdfPath').textContent = '当前 PDF：' + (path || '—（取不到路径）');
     if (ok) { log(`ping ok ${base}`); tick(); }
+    else { startWaiting(true); }     // 没起来就自己等（计划任务会按需拉起）
 }
+
+// ---- 引擎未就绪时的自助入口 ----
+// 页面无法直接创建进程（实测 ShellExecute 无效、CreateObject 报 Load dll fail、
+// CoCreateInstance cannot create、自定义协议也不触发），所以按钮的语义是：
+// 「已请求启动，等系统按需拉起」+ 每 2 秒自检，起来就自动接管。
+let waitTimer = null, waitDeadline = 0;
+
+function setOnline(ok) {
+    $('dot').className = 'dot ' + (ok ? 'ok' : 'bad');
+    $('state').textContent = ok ? '引擎在线' : '引擎未启动';
+    $('cardEngine').style.display = ok ? 'none' : 'block';
+    $('btnGo').disabled = !ok;
+}
+
+function startWaiting(auto) {
+    $('cardEngine').style.display = 'block';
+    $('btnEngine').disabled = true;
+    $('btnEngine').textContent = '正在等待引擎…';
+    $('engineHint').textContent = '已请求启动：系统每 1 分钟检查一次，通常 60 秒内就绪（也可双击桌面「PDF转表格·启动引擎」立即启动）';
+    if (auto === true) log('引擎未启动，开始自动等待');
+    if (waitTimer) return;
+    waitDeadline = Date.now() + 90000;
+    const step = async () => {
+        const ok = await probe();
+        if (ok) {
+            waitTimer = null;
+            setOnline(true);
+            $('btnEngine').disabled = false;
+            $('btnEngine').textContent = '启动引擎';
+            log('引擎已就绪 ' + base);
+            tick();
+            return;
+        }
+        if (Date.now() > waitDeadline) {
+            waitTimer = null;
+            $('btnEngine').disabled = false;
+            $('btnEngine').textContent = '重试';
+            $('engineHint').textContent = '还没就绪：请双击桌面「PDF转表格·启动引擎」，或稍后再点「重试」';
+            log('等待超时');
+            return;
+        }
+        waitTimer = setTimeout(step, 2000);
+    };
+    step();
+}
+
+$('btnEngine').onclick = () => { log('手动请求启动引擎'); startWaiting(false); };
+
+// 每 5 秒自检一次：引擎起来/挂掉都能自己发现，面板不会停留在过期状态
+setInterval(async () => {
+    const wasOnline = !!base;
+    const ok = await probe();
+    if (ok && !wasOnline) {
+        setOnline(true);
+        log('检测到引擎恢复 ' + base);
+        tick();
+    } else if (!ok && wasOnline) {
+        base = null;
+        setOnline(false);
+        log('引擎已断开');
+        startWaiting(true);
+    }
+}, 5000);
+
 
 $('btnGo').onclick = async () => {
     if (!base) {
         const ok = await probe();
-        if (!ok) { $('state').textContent = '引擎未启动 · 双击桌面「PDF转表格·启动引擎」'; log('引擎未启动'); return; }
+        if (!ok) { setOnline(false); startWaiting(false); log('引擎未启动，已转为等待'); return; }
     }
     const path = pdfPathSafe();
     if (!path) { $('hint').textContent = '取不到当前 PDF 路径'; return; }

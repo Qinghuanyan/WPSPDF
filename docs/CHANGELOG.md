@@ -160,3 +160,21 @@
 - 本地引擎 `engine/server.py`（v1.0.0）：`/ping` `/version` `/status` `/shutdown` `/convert`(501)。
 - 安装/卸载：`tools/install.ps1`（备份 publish.xml + 合并条目 + 标记）、`tools/uninstall.ps1`（安全断言 + 精确移除）、`一键安装.bat` / `一键卸载.bat`。
 - 证据：`evidence/baseline-*.txt`、`evidence/install-pre-*.json`。
+
+## v1.4.1 — 2026-11-27
+
+**窗格里加「启动引擎」按钮；并查清「页签忽然消失」的第三个原因**
+
+- 窗格 `tp.js` / `taskpane.html`：
+  - 引擎未就绪时显示 **「启动引擎」** 按钮与说明；点击后进入等待态，每 2 秒自检，就绪即自动接管（不需要再点第二次）。
+  - 新增 5 秒健康检查：引擎中途挂掉/恢复，面板都会自己切换，不停留在过期状态。
+  - 按钮**不能直接创建进程**（见下），语义是「已请求 + 等待系统按需拉起」，最多 60 秒。
+- **又堵死三条通道**（活页面实测，与前三条一起构成完整结论）：`<a href="wpspdf://...">` 点击无效、
+  `window.open('wpspdf://...')` 被拦（返回 null）、`wps.OpenWebUrl` 对 `wpspdf://` 与 `file://...bat` 均不触发。
+  已注册 `HKCU\Software\Classes\wpspdf` 协议处理器做对照，标记文件 `protocol-hit.txt` 从未生成。
+- **「页签忽然消失」的第三个原因：WPS 的加载项完整性校验**。
+  在 WPS 运行期间覆盖 `jsaddons\WPSPDFPdf_1.0.0` 会弹
+  「加载项 "WPSPDFPdf" 已经被修改，是否…」（`evidence/pane-now-dialog.png`），确认前**页签被扣住**。
+  → `tools/install-offline.ps1` 增加保护：检测到 WPS 进程在跑就直接报错退出，要求先完全退出。
+- 记录：本次自查时 `PrintWindow` 对功能区抓图会返回**同一张旧位图**（两次抓图 sha256 完全相同），
+  不能作为「页签是否出现」的判据；以用户实机截图/`GET /pdf/ribbon.xml` 日志为准。
