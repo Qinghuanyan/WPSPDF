@@ -17,15 +17,16 @@
 数据核对（v1.3.0）：国赛序号 1–568 连续无断点；「正式答辩时段」568/577 行有值
 （9 行空白是原 PDF 自带的分组间隔行）；日志中「有墨但没识别出文字」为 0。
 
-## 怎么用
+## 怎么用（一句话版）
 
-1. 双击 `tools/start-engine.bat`（或让加载项自己拉起，见「引擎生命周期」）
-2. 用 WPS 打开 PDF → 点页签 **「PDF转表格」** → 点 **「转成 WPS 表格」**
-3. 右侧窗格显示进度与预计剩余时间，完成后自动用 WPS 表格打开产物
+**右键 PDF →「PDF 转表格（WPSPDF）」** → 自动起引擎并用 WPS 打开 → 点页签 **「PDF转表格」**
+→ 窗格里点 **「开始转换」** → 进度/预计剩余时间在窗格显示，完成后自动用 WPS 表格打开产物。
 
 其他入口：
+- 只起引擎：`tools/start-engine.bat`；看状态：`tools/check-engine.bat`
 - 把 PDF 拖到 `tools/convert-here.bat` 上
-- 置顶悬浮条：`tools/start-floatbar.bat`（贴在 WPS 窗口右上角）
+- 置顶悬浮条：`tools/start-floatbar.bat`（贴在 WPS 窗口右上角，备用）
+- 想让窗格里直接有「启动引擎」按钮：`pwsh tools\install-loader.ps1 -Action register`（可选，见「入口与启停」）
 
 ## 组成
 
@@ -55,7 +56,7 @@ tools\uninstall.ps1
 安装前状态会记录到 `evidence/install-pre-*.json`，卸载后 `jsaddons` 回到安装前状态。
 **不写注册表、不改 WPS 安装目录、不动用户文件。**
 
-## 入口与启停（v1.5：两层结构，重引擎完全按需）
+## 入口与启停（v1.6：零常驻 + PDF 右键菜单）
 
 **页签不依赖任何服务**。PDF 侧加载项装的是官方「离线本地包」：
 
@@ -66,20 +67,26 @@ publish.xml: <jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version
 `url` 是**目录名**而不是网址（依据 wpsjs `build.js:163`），所以 WPS 从磁盘读 `ribbon.xml` 与页面
 → **引擎不启动也有「PDF转表格」页签**（`evidence/offline-localpkg-tabrow.png`）。
 
-**按需启动分两层**（照搬 [LocalReadTranslate iteration-14](https://raw.githubusercontent.com/Yan-ShiBo/LocalReadTranslate/main/docs/iteration-14-2026-07-29-addin-on-demand-startup.md) 的做法）：
+**默认零常驻**：不装任何常驻进程、不留计划任务、不开机自启。入口放在 Windows 侧：
 
-| 层 | 进程 | 何时在 | 开销 |
-|---|---|---|---|
-| 轻量加载器 `engine/loader.py`（38730） | `pythonw` | 登录自启，一直很轻 | 实测 **27 MB / 5 线程 / CPU 0**，不加载任何模型 |
-| 重引擎 `engine/server.py`（38731） | `pythonw` + RapidOCR | **只在点「启动引擎」时** | 空闲 20 秒自行退出，WPS 关了必退 |
+| 入口 | 做什么 |
+|---|---|
+| **右键 PDF →「PDF 转表格（WPSPDF）」**（默认） | 起引擎（约 3 秒）→ 用 WPS 打开该 PDF → 转完引擎 20 秒自退 |
+| `tools\start-engine.bat` | 只起引擎（不打开文件） |
+| `tools\check-engine.bat` | 看引擎在不在线 |
 
-链路：窗格「启动引擎」→ `POST 127.0.0.1:38730/start` → 加载器创建进程 → 引擎就绪 → 窗格自动接管。
-实测：引擎离线 → 点按钮 → **3.7 秒**就绪。**没有每分钟轮询的计划任务**（v1.5.0 已删除）。
+菜单项带专用图标 `addon-pdf/images/wpspdf.ico`（16~256 九尺寸；预览 `evidence/menu-icon-128.png`）。
+若图标没刷新，重启一次资源管理器即可（Windows 图标缓存）。
 
-为什么必须有那一层加载器：加载项页面**无法创建进程**（实测 7 条通道全废，见关键技术点 13、15），
-页面只能发 HTTP 请求，所以得有个能被 HTTP 调用的本地小服务替它创建进程。
-连这一层都不想要的话，只能走零常驻入口：PDF 右键菜单「PDF 转表格」或
-`tools\start-engine.bat`（起引擎 + 打开 PDF），此时页签仍在，只是按钮点了没人接。
+**可选加装「窗格一键启动」**：加载项页面**无法创建进程**（实测 7 条通道全废，见关键技术点 13、15），
+页面只能发 HTTP，所以想要按钮真能用，就需要一层能被 HTTP 调用的极轻服务：
+
+```powershell
+pwsh tools\install-loader.ps1 -Action register   # 装：27 MB / CPU 0，LOGIN 自启
+pwsh tools\install-loader.ps1 -Action unregister # 卸：回到零常驻
+```
+装后：窗格「启动引擎」→ `POST 127.0.0.1:38730/start` → 加载器创建进程 → 引擎就绪（实测 **3.7 秒**）。
+这层结构参考 [LocalReadTranslate iteration-14](https://raw.githubusercontent.com/Yan-ShiBo/LocalReadTranslate/main/docs/iteration-14-2026-07-29-addin-on-demand-startup.md)。
 
 ## 关闭 PDF 时的现象（与插件无关，已 A/B 验证）
 
@@ -91,12 +98,12 @@ publish.xml: <jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version
 ## 引擎生命周期
 
 - 只监听 `127.0.0.1`，端口 38731 起，被占用自动顺延（加载项按 38731–38734 探测）
-- **不常驻**：只由计划任务/快捷方式按需拉起；`.run/idle_timeout`（默认 20 秒）到点自行退出。
+- **不常驻**：只有右键菜单 / 快捷方式 / 加载器请求时才起来；`.run/idle_timeout`（默认 20 秒）到点自行退出。
   判活只看**文档进程**（`wpspdf/et/wpp/wps`），不含 `wpsoffice.exe`——它关文档后会留空壳窗口，
   用它会把这引擎焊死
 - 开机自启已**取消**（`tools/autostart.ps1 -Action unregister`），因为页签不再需要引擎先起
-- 常驻期间占用约 51 MB 内存、空闲 CPU ≈0
-- 加载项**不会**用 `wps.OAAssist.ShellExecute` 拉起引擎：三条通道实测全部无效，见关键技术点 11、13
+- 运行期间占用约 51 MB 内存、空闲 CPU ≈0
+- 加载项**不会**用 `wps.OAAssist.ShellExecute` 拉起引擎：通道实测全部无效，见关键技术点 11、13
 
 ## 关键技术点（都是踩过的坑）
 

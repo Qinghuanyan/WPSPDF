@@ -2,34 +2,43 @@
 
 ## Current State
 
-**v1.4：页签本地常驻，引擎按需启动，WPS 关了引擎就退。**
+**v1.6.0：定为「零常驻 + PDF 右键菜单」方案，数据侧与页签侧都已收口。**
 
-- 页签：离线本地包 `jsaddons\WPSPDFPdf_1.0.0\` + `publish.xml` 的 `jsplugin url="WPSPDFPdf_1.0.0"`；
-  **引擎停止时页签照常出现**（`evidence/offline-localpkg-tabrow.png`）。
-- 引擎：计划任务 `WPSPDF-EngineOnDemand` 每分钟检查，WPS 文档进程在跑才拉起；`.run/idle_timeout=20`，
-  WPS 关掉后 `idle 22s → shutdown`。开机自启已取消。
-- 数据侧（v1.3.0 起不变）：18 页 → 578 行 × 10 列；序号 1–568 连续；第 10 列 568/577；
-  `仍有墨未识别 0`；25 个低置信度格进「需校对」表。
+- **零常驻**（2026-11-27 实测核对）：`38730`/`38731` 均无监听、无计划任务、Startup 无自启项、
+  系统内本项目进程 0 个。重引擎只在用户点入口时启动，`.run/idle_timeout=20`，WPS 关掉即退
+  （实测 `idle 22s → shutdown`）。
+- **入口**：右键 PDF →「PDF 转表格（WPSPDF）」（`tools/open-with-wpspdf.bat`）→ 起引擎（约 3 秒）
+  → 用 WPS 打开该 PDF → 转换完引擎自退。菜单项带专用图标
+  `addon-pdf/images/wpspdf.ico`（16~256 九尺寸，`ExtractIconEx` 可读，预览 `evidence/menu-icon-128.png`）。
+- **WPS 内页签**：离线本地包 `jsaddons\WPSPDFPdf_1.0.0\` + `publish.xml` 的
+  `jsplugin url="WPSPDFPdf_1.0.0"`，**不依赖任何服务**（引擎停止时页签照常出现，
+  `evidence/offline-localpkg-tabrow.png`）。
+- **可选加装**：想要「窗格里一键启动引擎」就装轻量加载器（`tools/install-loader.ps1 -Action register`，
+  27 MB / CPU 0，`POST 127.0.0.1:38730/start` 实测 3.7 秒拉起引擎）；默认不装，保持零常驻。
+- **数据侧**（v1.3.0 起不变）：18 页 → 578 行 × 10 列；序号 1–568 连续；第 10 列 568/577；
+  `仍有墨未识别 0`；25 个低置信度格进「需校对」表；重转 9–19 秒（页级缓存）。
 
 ## Recent Changes
 
+- 2026-11-27 01:05 **v1.6.0：定为零常驻方案 + 右键菜单图标**。
+  用户选定「保留右键菜单、零常驻」，于是卸载加载器（Startup 快捷方式删除、进程退出，复核无残留）。
+  右键菜单原先指向 `.png` 被 Windows 显示成通用文档图标，新增九尺寸 `.ico` 并改注册为 `Icon=<路径>.ico,0`。
+  窗格文案改为引导右键入口；`一键安装/卸载.bat` 改为零常驻口径。
+- 2026-11-27 00:55 **v1.5.0：加轻量加载器 + 真一键按钮，删掉每分钟轮询任务**。
+  依据 LocalReadTranslate iteration-14 的两层启动结构；加载器只导入标准库（27 MB / CPU 0），
+  窗格按钮 `POST /start` 实测 3.7 秒拉起引擎。删除被用户指出「等于常驻」的每分钟计划任务。
 - 2026-11-27 00:25 **v1.4.0：页签改为离线本地包 + 引擎按需启动**。
   关键发现：wpsjs 离线安装格式里 `url` 是 `jsaddons` 下的**目录名**（`build.js:163`），
-  照它落地后引擎完全停止也有页签。引擎改由每分钟的计划任务按需拉起（不常驻），
-  判活只看文档进程并剔除 `wpsoffice.exe` 空壳，idle 20s；开机自启取消。
+  照它落地后引擎完全停止也有页签。判活只看文档进程并剔除 `wpsoffice.exe` 空壳，idle 20s；开机自启取消。
   另实测坐实「加载项页面无法起进程」：`ShellExecute` 静默无效、`CreateObject` `Load dll fail`、
-  `CoCreateInstance` `cannot create`。
-- 2026-11-27 00:00 **查清页签注册时机与关闭卡死归属**。
+  `CoCreateInstance` `cannot create`、`<a href>`/`window.open`/`OpenWebUrl` 三条协议通道也不触发。
+- 2026-11-27 00:00 **查清「页签不出现」的注册时机与「关闭卡死」归属**。
   页签只在 WPS **进程启动**时注册一次：引擎没起→无 ribbon.xml→无页签；引擎后起或改过 publish.xml，
   已在跑的 WPS 不会补注册（同一窗口重开文档也不行，必须退干净重开）。
   「关闭卡死」A/B 验证：禁用加载项后行为相同 → 是 WPS 留空「WPS Office」窗口，关掉它 1 秒退出，与插件无关。
-  另实测：离线本地目录注册（`jsplugin` + 本地 path）在本机 WPS 不出页签，只能走 http 托管。
-  新增 `tools/check-engine.bat`；`poll.js`/`tp.js` 加 beforeunload/pagehide 清理。
 - 2026-11-26 23:37 **引擎 v1.3.1：修 PDF 卡死与页签时有时无**。
   卡死根因：旧 `poll.js` 在引擎不可达时每 15s 调 `wps.OAAssist.ShellExecute`（WPS 个人版静默拦截，
   同步调用拖死宿主 UI）。已删除自动拉起，改指数退避；删掉 `util.js` 同步 XHR 死代码；循环加单例守卫。
-  页签消失根因：引擎空闲退出后 WPS 取不到 `ribbon.xml`。改为**引擎生存期跟随 WPS**，并补注册开机自启
-  （此前 HKCU Run 无该条目）。实测：页签行 `阅读 | 增值服务 | PDF转表格`，`jsver=1.3.1`，`taskpane ok`。
 - 2026-11-26 23:00 **引擎 v1.3.0：修三处静默丢字 + 提速**。
   ① 跨页并集列边界 —— 「正式答辩时段」整列曾因后 17 页缺右边框被判网格外丢弃（577 行里 540 行空）；
   ② 同线块按 y 聚类再按 x 排 —— 长标题 `《城垣万象古城池数字化复原》` 曾颠倒；

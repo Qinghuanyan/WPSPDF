@@ -131,3 +131,10 @@
   `wps.OAAssist.CoCreateInstance("WScript.Shell")` 报 `can not create`。
 - 替代：Windows 侧按需入口（计划任务 / PDF 右键菜单 / 桌面快捷方式），均不常驻。
 - 状态：**dropped（技术上不可达，已用替代方案满足意图）**
+
+## REQ-021 — 零常驻 + 右键菜单入口（用户 2026-11-27 选定）
+- 时间：2026-11-27
+- 描述：保留「PDF 右键菜单」作为入口，系统里不要任何常驻进程/计划任务；并给菜单项加图标。
+- 验收：`38730/38731` 无监听、无计划任务、Startup 无条目；右键菜单显示专用图标；右键 PDF 能起引擎并打开。
+- 状态：**done**（加载器已卸载；`wpspdf.ico` 九尺寸，`ExtractIconEx` 可读；`tools/open-with-wpspdf.bat` 链路实测起引擎 3.7s）
+- 备注：REQ-019 的「按需」由本方案达成；REQ-018 的「不得拖死 WPS」继续由 v1.3.1 的退避+单例保证。
