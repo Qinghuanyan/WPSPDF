@@ -1,5 +1,12 @@
 # CHANGELOG — WPSPDF
 
+## v1.2.1 — 2026-11-26
+
+- **完成后由引擎自动打开产物**（`os.startfile`），不再依赖窗格页面：窗格是后台页，CEF 会节流其定时器，页面侧「感知完成→打开」不可靠。
+  `/convert` 支持 `{"open": false}` 关闭该行为；`/job` 返回 `opened` / `open_error`。
+- **进度/ETA 修正**：转换子进程改为 `-u` 无缓冲（`PYTHONUNBUFFERED=1`），否则 `pages_done` 一直是 0、ETA 不会收紧。
+  实测：5/18 时 ETA 126s → 12/18 时 44s，稳定 7.4 秒/页。
+
 ## v1.2.0 — 2026-11-26
 
 - 引擎：`/job` 增加 `pages_total/pages_done/elapsed_s/eta_s/percent`；新增 `/jobs`、`/cmd`、`/evalcode`（devmode 下）。

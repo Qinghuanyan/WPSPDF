@@ -29,7 +29,7 @@ function GetImage(control) {
 function paneUrl() {
     // 必须是带 scheme+host 的绝对地址，否则 WPS 会当成相对路径导致白屏
     const href = String(location.href);
-    return href.replace(/[^\/]*$/, "") + "ui/taskpane.html";
+    return href.replace(/[^\/]*$/, "") + "ui/taskpane.html?v=" + Date.now();
 }
 
 function openPane() {

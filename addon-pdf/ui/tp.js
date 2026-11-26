@@ -2,6 +2,8 @@
 const PORTS = [38731, 38732, 38733, 38734];
 let base = null;
 let curJob = null;
+let sawRunning = false;
+let openedFor = null;
 let timer = null;
 const $ = id => document.getElementById(id);
 
@@ -78,10 +80,26 @@ async function fetchJob() {
     } catch (e) { return null; }
 }
 
+function openResult(path) {
+    if (!path) return;
+    try {
+        fetch(`${base}/open?path=` + encodeURIComponent(path))
+            .then(r => r.json())
+            .then(d => log(d.ok ? ('已用 WPS 表格打开：' + path) : ('打开失败：' + (d.error || ''))))
+            .catch(e => log('打开失败：' + e));
+    } catch (e) { log('打开失败：' + e); }
+}
+
 async function tick() {
     if (!base) return;
     const job = await fetchJob();
-    if (job && job.id !== curJob) { curJob = job.id; log('接管任务 ' + job.id); }
+    if (job && job.id !== curJob) { curJob = job.id; sawRunning = false; log('接管任务 ' + job.id); }
+    if (job && job.state === 'running') sawRunning = true;
+    // 只有“亲眼看到它在跑、然后变完成”才自动打开，避免每次开窗格都弹一次
+    if (job && job.state === 'done' && openedFor !== job.id) {
+        openedFor = job.id;
+        if (job.opened) log('已用 WPS 表格打开产物');
+    }
     paint(job);
     if (job && job.state === 'running') {
         timer = setTimeout(tick, 1000);

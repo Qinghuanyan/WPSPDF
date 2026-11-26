@@ -62,20 +62,22 @@ def _page_count(pdf_path: str) -> int:
         return 0
 
 
-def start_job(pdf_path: str) -> str:
+def start_job(pdf_path: str, open_when_done: bool = True) -> str:
     jid = uuid.uuid4().hex[:12]
     src = Path(pdf_path)
     out = OUTDIR / (src.stem[:60] + ".xlsx")
     total = _page_count(pdf_path)
     _update(jid, state="running", src=str(src), name=src.name, out=str(out),
-            started=time.time(), pages_total=total, pages_done=0, log=[])
+            started=time.time(), pages_total=total, pages_done=0, log=[],
+            open_when_done=bool(open_when_done))
 
     def run():
         try:
             proc = subprocess.Popen(
-                [sys.executable, str(CONVERT), str(src), "-o", str(out)],
+                [sys.executable, "-u", str(CONVERT), str(src), "-o", str(out)],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding="utf-8", errors="replace", bufsize=1,
+                env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"},
             )
             for line in proc.stdout:
                 line = line.rstrip()
@@ -90,6 +92,12 @@ def start_job(pdf_path: str) -> str:
             code = proc.wait()
             if code == 0 and Path(JOBS[jid]["out"]).exists():
                 _update(jid, state="done", finished=time.time())
+                if JOBS[jid].get("open_when_done"):
+                    try:
+                        os.startfile(JOBS[jid]["out"])  # noqa: S606  产物用默认程序（WPS 表格）打开
+                        _update(jid, opened=True)
+                    except Exception as e:  # noqa: BLE001
+                        _update(jid, opened=False, open_error=str(e))
             else:
                 tail = " | ".join(JOBS[jid]["log"][-3:])
                 _update(jid, state="error", msg=tail or f"exit {code}", finished=time.time())
@@ -300,7 +308,7 @@ class Handler(BaseHTTPRequestHandler):
             if not path or not Path(path).exists():
                 self._json(400, {"ok": False, "error": "path not found", "path": path})
                 return
-            jid = start_job(path)
+            jid = start_job(path, open_when_done=bool(payload.get("open", True)))
             self._json(200, {"ok": True, "job": jid, "src": path})
         else:
             self._json(404, {"ok": False, "error": "not found"})
