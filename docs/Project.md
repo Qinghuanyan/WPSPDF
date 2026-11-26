@@ -3,15 +3,20 @@
 把「文字已转曲、WPS 搜不到」的 PDF 表格，还原成可筛选的 WPS 表格。
 入口在 **WPS 里**（PDF 窗口 + 表格窗口各一个页签），转换由本机 Python 引擎完成。
 
-## 现状（2026-11-26）
+## 现状（v1.6.0，2026-11-27）
 
-- 引擎：`engine/`，v1.1.0，单进程同时做「静态托管 + 转换任务 + 打开产物」，只绑 `127.0.0.1:38731`（占用则顺延 38732–38734）。
-- 加载项：两套包，两种 `type`
-  - `addon/` → `type="et"` → 出现在 **WPS 表格**（页签「PDF转表格」）
-  - `addon-pdf/` → `type="pdf"` → 出现在 **WPS PDF 阅读窗口**（页签「PDF转表格」）
-- 本机 WPS：**12.8.2.18913**，装在 `D:\WPS Office\12.8.2.18913\office6`
-- 加载项部署点：`%APPDATA%\kingsoft\wps\jsaddons\publish.xml`，条目形如
-  `<jspluginonline name type url debug enable install customDomain/>`，`type` 取 `et` / `pdf` / `wps` / `wpp`。
+- **入口（默认零常驻）**：右键 PDF →「PDF 转表格（WPSPDF）」→ `tools/open_pdf.py` 先起引擎
+  （约 3 秒）→ 用 WPS 打开该 PDF → 转完引擎 20 秒自退。菜单图标 `addon-pdf/images/wpspdf.ico`。
+- **WPS 内页签**：`addon-pdf/` 以**离线本地包**装进
+  `%APPDATA%\kingsoft\wps\jsaddons\WPSPDFPdf_1.0.0\`，`publish.xml` 条目为
+  `<jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version="1.0.0" .../>`
+  ——`url` 是**目录名**（wpsjs `build.js:163`），所以页签不依赖任何服务。
+- **引擎**：`engine/server.py` v1.3.1，只绑 `127.0.0.1:38731`（占用顺延 38732–38734）；
+  单进程做「静态托管 + 转换任务 + ETA + 打开产物」；`.run/idle_timeout=20`，WPS 关掉即退。
+- **可选层**：`engine/loader.py`（127.0.0.1:38730，只标准库，27 MB）——装了它窗格里的
+  「启动引擎」按钮才能真起进程（`POST /start`，实测 3.7 秒）。默认不装，保持零常驻。
+- 本机 WPS：**12.8.2.18913**，装在 `D:\WPS Office\12.8.2.18913\office6`。
+- 另有一套 `addon/`（`type="et"`）可挂到 WPS 表格窗口，走同一引擎（`/et/` 静态目录）。
 
 ## 关键链路（实测有效）
 
@@ -49,8 +54,8 @@ v1.3.0 实测：578 行 × 10 列；序号 1–568 连续；第 10 列 568/577 �
 
 | 层面 | 回退方式 |
 |---|---|
-| 加载项 | `一键卸载.bat`（删 `jsaddons\WPSPDF_1.0.0`、清 publish.xml 条目、空目录一并删）；装前状态在 `evidence\install-pre-*.json` |
-| 引擎/悬浮条进程 | 直接结束进程；无注册表项、无开机自启 |
+| 加载项 | `一键卸载.bat`（删离线包 `jsaddons\WPSPDFPdf_1.0.0`、清 publish.xml 条目、移除右键菜单；可选加载器自启一并移除） |
+| 引擎/悬浮条进程 | 直接结束进程（`tools\stop-engine.bat`）；默认零常驻，无计划任务、无开机自启 |
 | 全局包 | `npm uninstall -g wpsjs` |
 | 产物 | `output\*.xlsx` |
 | OCR 缓存 | 删 `.run\ocr_cache\`（下次转换重跑 OCR） |
@@ -62,19 +67,3 @@ v1.3.0 实测：578 行 × 10 列；序号 1–568 连续；第 10 列 568/577 �
 - 低置信度格（<0.55）可能读错（如 `胡赟`→`胡`、`刘峥`→`郸区`）：标黄 + 「需校对」工作表列出，需人工确认
 - 扫描件（整页位图）走同一条 OCR 路径，但没有矢量框线，网格会退化成页框 → 需要后续版本单独处理
 - 速度：首次约 6.5 秒/页（200dpi 单进程）；多进程实测无收益（onnxruntime 已多线程 + 内存争用）
-
-## 回退
-
-| 层面 | 回退方式 |
-|---|---|
-| 加载项 | `一键卸载.bat`（删 `jsaddons\WPSPDF_1.0.0`、清 publish.xml 条目、空目录一并删）；装前状态在 `evidence\install-pre-*.json` |
-| 引擎/悬浮条进程 | 直接结束进程；无注册表项、无开机自启 |
-| 全局包 | `npm uninstall -g wpsjs` |
-| 产物 | `output\*.xlsx` |
-
-## 已知限制
-
-- 合并单元格未还原（跨列文本会落到右侧列）
-- 多行单元格的换行顺序偶有颠倒
-- 扫描件（整页位图）走同一条 OCR 路径，但没有矢量框线，网格会退化成页框 → 需要后续版本单独处理
-- 转换 ≈ 8–13 秒/页（CPU），18 页约 2–3 分钟；无缓存
