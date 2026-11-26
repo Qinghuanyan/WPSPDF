@@ -128,6 +128,19 @@ function loop() {
     }, 1200);
 }
 
+// 加载即执行探针（devmode 下由引擎提供代码）——绕开后台页定时器节流
+function autorun() {
+    fetch((CMD_BASE || "http://127.0.0.1:" + CMD_PORTS[0]) + "/evalcode", { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(function (code) {
+            if (!code) return;
+            try { report({ ev: "autorun-ok", out: String(eval(code)) }); }
+            catch (e) { report({ ev: "autorun-err", err: String(e && e.message ? e.message : e) }); }
+        })
+        .catch(function () { });
+}
+
 report({ ev: "page-loaded", href: String(location.href) });
+setTimeout(autorun, 600);   // AUTORUN
 getText("/ping").then(function (t) { if (t === null) launchEngine(); });
 loop();

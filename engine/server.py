@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 
 APP = "WPSPDF"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 ROOT = Path(__file__).resolve().parent.parent
 RUNDIR = ROOT / ".run"
 OUTDIR = ROOT / "output"
@@ -334,7 +334,6 @@ class Handler(BaseHTTPRequestHandler):
 def pick_port(preferred: int) -> int:
     for p in range(preferred, preferred + 4):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind(("127.0.0.1", p))
                 return p
@@ -365,12 +364,31 @@ def watchdog(server):
             return
 
 
+def _already_running(preferred: int) -> int:
+    """已有实例在跑就返回其端口，避免拉起第二个进程。"""
+    import urllib.request
+    for p in range(preferred, preferred + 4):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{p}/ping", timeout=0.6) as r:
+                data = json.loads(r.read().decode("utf-8"))
+                if data.get("app") == APP:
+                    return p
+        except Exception:
+            continue
+    return 0
+
+
 def main() -> int:
     global LAST_SEEN
     preferred = int(sys.argv[1]) if len(sys.argv) > 1 else 38731
+    alive = _already_running(preferred)
+    if alive:
+        print(f"[{APP}] already running on {alive}, skip", flush=True)
+        return 0
     port = pick_port(preferred)
     (RUNDIR / "engine.pid").write_text(str(os.getpid()), encoding="utf-8")
     LAST_SEEN = time.time()
+    ThreadingHTTPServer.allow_reuse_address = False
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     threading.Thread(target=watchdog, args=(srv,), daemon=True).start()
     print(f"[{APP}] v{VERSION} http://127.0.0.1:{port} pid={os.getpid()} idle_timeout={int(IDLE_TIMEOUT)}s", flush=True)

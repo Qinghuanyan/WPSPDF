@@ -46,11 +46,35 @@ def page_rules(page: fitz.Page, min_len: float = 8.0):
     return hs, vs
 
 
-def page_grid(page: fitz.Page, min_len: float = 8.0) -> Tuple[List[float], List[float]]:
+def page_grid(page: fitz.Page, min_len: float = 8.0, xs_override=None) -> Tuple[List[float], List[float]]:
     hs, vs = page_rules(page, min_len)
     ys = _cluster([h[0] for h in hs])
     xs = _cluster([v[0] for v in vs])
+    if xs_override is not None:
+        xs = list(xs_override)
     return ys, xs
+
+
+def union_xs(pages, tol: float = 2.0) -> List[float]:
+    """跨页并集列边界。
+
+    多页表格里常有「某一页的末列右边框没画」的情况：文字在，竖线缺，
+    该列就会被当成网格外丢字（本项目第 2–18 页的「正式答辩时段」正是如此）。
+    把各页竖线 x 取并集，得到整份文档的规范列边界。
+    """
+    vals: List[float] = []
+    for pg in pages:
+        vals.extend(v[0] for v in page_rules(pg)[1])
+    return _cluster(vals, tol)
+
+
+def xs_is_subset(page_xs: List[float], canon: List[float], tol: float = 2.0) -> bool:
+    """页内列边界是否全部落在规范边界里。
+
+    是 → 说明该页只是「少画了几条线」，可安全用规范边界补齐；
+    否 → 该页版式确实不同，保持原样，不要硬套。
+    """
+    return all(any(abs(x - c) <= tol for c in canon) for x in page_xs)
 
 
 def locate(x: float, y: float, ys: List[float], xs: List[float]):
