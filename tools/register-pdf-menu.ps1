@@ -6,13 +6,16 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $key = 'HKCU:\Software\Classes\SystemFileAssociations\.pdf\shell\WPSPDF'
 $bat = Join-Path $Root 'tools\open-with-wpspdf.bat'
-$icon = Join-Path $Root 'addon-pdf\images\convert.png'
+# 右键菜单图标必须是 .ico（PNG 会被 Windows 显示成通用文档图标）
+$icon = Join-Path $Root 'addon-pdf\images\wpspdf.ico'
+# 形式取 "路径,序号" 且路径不加引号（本项目路径无空格）——这是 Windows 最兼容的写法
+$iconValue = if (Test-Path $icon) { "$icon,0" } else { Join-Path $Root 'addon-pdf\images\convert.png' }
 
 switch ($Action) {
     'register' {
         New-Item -Path $key -Force | Out-Null
         Set-ItemProperty -Path $key -Name '(default)' -Value 'PDF 转表格（WPSPDF）'
-        Set-ItemProperty -Path $key -Name 'Icon' -Value $icon
+        Set-ItemProperty -Path $key -Name 'Icon' -Value $iconValue
         New-Item -Path "$key\command" -Force | Out-Null
         Set-ItemProperty -Path "$key\command" -Name '(default)' -Value "`"$bat`" `"%1`""
         Write-Host "  · 已注册右键菜单：$key" -ForegroundColor Cyan

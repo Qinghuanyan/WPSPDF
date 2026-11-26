@@ -134,7 +134,7 @@ function startWaiting(auto) {
     $('cardEngine').style.display = 'block';
     $('btnEngine').disabled = true;
     $('btnEngine').textContent = '正在等待引擎…';
-    $('engineHint').textContent = '已请求启动：系统每 1 分钟检查一次，通常 60 秒内就绪（也可双击桌面「PDF转表格·启动引擎」立即启动）';
+    $('engineHint').textContent = '引擎未启动：右键点击 PDF 文件 →「PDF 转表格（WPSPDF）」即可（会先起引擎再打开）';
     if (auto === true) log('引擎未启动，开始自动等待');
     if (waitTimer) return;
     waitDeadline = Date.now() + 90000;
