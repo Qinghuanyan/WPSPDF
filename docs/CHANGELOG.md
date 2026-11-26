@@ -178,3 +178,29 @@
   → `tools/install-offline.ps1` 增加保护：检测到 WPS 进程在跑就直接报错退出，要求先完全退出。
 - 记录：本次自查时 `PrintWindow` 对功能区抓图会返回**同一张旧位图**（两次抓图 sha256 完全相同），
   不能作为「页签是否出现」的判据；以用户实机截图/`GET /pdf/ribbon.xml` 日志为准。
+
+## v1.5.0 — 2026-11-27
+
+**按参考实现的分层结构重做「按需启动」：删掉每分钟轮询，改为轻量加载器 + 真·一键按钮**
+
+背景：用户指出「计划任务每分钟检查」本身就是常驻轮询，不满足按需。查证后确认这不是本项目独有难题，
+开源实现 LocalReadTranslate 的
+[iteration-14「Word/WPS 自动加载与完整服务按需启动」](https://raw.githubusercontent.com/Yan-ShiBo/LocalReadTranslate/main/docs/iteration-14-2026-07-29-addin-on-demand-startup.md)
+把同一问题总结为「循环依赖」：页面由本地服务提供、服务不跑就看不到启动按钮。
+它的解法是**两层结构**，本轮照此落地。
+
+- **新增轻量加载器** `engine/loader.py`（127.0.0.1:38730）：
+  只导入 Python 标准库，不加载 OCR/模型；实测 `pythonw` **27 MB / 5 线程 / 3 秒 CPU 增量 0**。
+  端点：`GET /ping`、`POST /start`（拉起引擎）、`GET /status`、`POST /shutdown`。
+  登录自启：`%APPDATA%\...\Startup\WPSPDF Add-in Loader.lnk`（`tools/install-loader.ps1`）。
+- **窗格按钮变成真的一键**：引擎离线时点「启动引擎」→ `POST 127.0.0.1:38730/start`
+  → 加载器创建进程 → 引擎就绪 → 窗格自动接管（每 2 秒自检，不用点第二次）。
+  实测：离线 → `POST /start` → **3.7 秒**内 `started:true, port:38731`。
+- **删除计划任务 `WPSPDF-EngineOnDemand`**（每分钟轮询）——用户指出它等于常驻。
+  现在常驻的只有加载器；**重引擎依然只在点按钮时启动，且 WPS 关了 20 秒自行退出**。
+- 加载器两处坑（都已修）：
+  1. `/ping` 里同步探测引擎（4 端口 ×1s）→ 客户端 3s 超时必失败；改成 0.2s×4，实测 0.84s 返回。
+  2. `allow_reuse_address` 开着时 Windows 允许两个实例同时 bind 38730 → 双实例争抢；
+     关闭该选项 + 增加单实例守卫（启动先探测 `/ping`，已有则退出）。
+- 协议通道尝试全部无效并已清理：注册 `wpspdf://` + 标记文件对照，
+  `wps.OpenWebUrl('wpspdf://…')`、`<a href>` 点击、`window.open` 均不触发；注册表项已删除。

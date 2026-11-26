@@ -162,7 +162,24 @@ function startWaiting(auto) {
     step();
 }
 
-$('btnEngine').onclick = () => { log('手动请求启动引擎'); startWaiting(false); };
+$('btnEngine').onclick = async () => {
+    log('请求启动引擎');
+    const asked = await askLoaderStart();
+    if (asked) log('轻量加载器已受理，等待引擎就绪');
+    startWaiting(false);
+};
+
+// 页面不能创建进程，但可以 HTTP 请求「轻量加载器」，由它来创建（参考 LocalReadTranslate 分层启动）
+async function askLoaderStart() {
+    try {
+        const r = await fetch('http://127.0.0.1:38730/start', { method: 'POST', cache: 'no-store' });
+        const d = await r.json();
+        return !!d.ok;
+    } catch (e) {
+        log('轻量加载器不在线（可双击桌面「PDF转表格·启动引擎」，或运行 tools\\install-loader.ps1 安装）');
+        return false;
+    }
+}
 
 // 每 5 秒自检一次：引擎起来/挂掉都能自己发现，面板不会停留在过期状态
 setInterval(async () => {
