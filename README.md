@@ -55,30 +55,31 @@ tools\uninstall.ps1
 安装前状态会记录到 `evidence/install-pre-*.json`，卸载后 `jsaddons` 回到安装前状态。
 **不写注册表、不改 WPS 安装目录、不动用户文件。**
 
-## 入口与启停（v1.4：页签本地常驻，引擎按需）
+## 入口与启停（v1.5：两层结构，重引擎完全按需）
 
-**页签不再依赖引擎**。PDF 侧加载项改成官方「离线本地包」形式装进 `jsaddons`：
+**页签不依赖任何服务**。PDF 侧加载项装的是官方「离线本地包」：
 
 ```
 %APPDATA%\kingsoft\wps\jsaddons\WPSPDFPdf_1.0.0\      ← 加载项文件（ribbon.xml / 页面 / 图标）
 publish.xml: <jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version="1.0.0" .../>
 ```
-`url` 是**目录名**而不是网址（依据 wpsjs `build.js:163` 的离线安装格式），所以 WPS 从磁盘读
-`ribbon.xml` 与页面 → **引擎不启动也有「PDF转表格」页签**（`evidence/offline-localpkg-tabrow.png`）。
+`url` 是**目录名**而不是网址（依据 wpsjs `build.js:163`），所以 WPS 从磁盘读 `ribbon.xml` 与页面
+→ **引擎不启动也有「PDF转表格」页签**（`evidence/offline-localpkg-tabrow.png`）。
 
-**引擎按需启动**（不常驻）：计划任务 `WPSPDF-EngineOnDemand` 每分钟跑一次 `tools/watch_once.py`，
-只有当「WPS 文档进程在跑（`wpspdf/et/wpp/wps`）」且「引擎没在跑」时才拉起引擎，跑完立刻退出。
-引擎自身也不常驻：WPS 文档关掉后按 `.run/idle_timeout`（默认 20 秒）自动退出——
-实测 `idle 22s → shutdown`。
+**按需启动分两层**（照搬 [LocalReadTranslate iteration-14](https://raw.githubusercontent.com/Yan-ShiBo/LocalReadTranslate/main/docs/iteration-14-2026-07-29-addin-on-demand-startup.md) 的做法）：
 
-三种启动方式（任选）：
-| 方式 | 命令 |
-|---|---|
-| PDF 右键菜单「PDF 转表格（WPSPDF）」 | 起引擎 + 用 WPS 打开该 PDF |
-| 桌面快捷方式「PDF转表格·启动引擎」 | 只起引擎 |
-| 什么都不做 | WPS 打开 PDF 后 ≤1 分钟，计划任务自动拉起 |
+| 层 | 进程 | 何时在 | 开销 |
+|---|---|---|---|
+| 轻量加载器 `engine/loader.py`（38730） | `pythonw` | 登录自启，一直很轻 | 实测 **27 MB / 5 线程 / CPU 0**，不加载任何模型 |
+| 重引擎 `engine/server.py`（38731） | `pythonw` + RapidOCR | **只在点「启动引擎」时** | 空闲 20 秒自行退出，WPS 关了必退 |
 
-检查引擎状态：双击 `tools\check-engine.bat`。
+链路：窗格「启动引擎」→ `POST 127.0.0.1:38730/start` → 加载器创建进程 → 引擎就绪 → 窗格自动接管。
+实测：引擎离线 → 点按钮 → **3.7 秒**就绪。**没有每分钟轮询的计划任务**（v1.5.0 已删除）。
+
+为什么必须有那一层加载器：加载项页面**无法创建进程**（实测 7 条通道全废，见关键技术点 13、15），
+页面只能发 HTTP 请求，所以得有个能被 HTTP 调用的本地小服务替它创建进程。
+连这一层都不想要的话，只能走零常驻入口：PDF 右键菜单「PDF 转表格」或
+`tools\start-engine.bat`（起引擎 + 打开 PDF），此时页签仍在，只是按钮点了没人接。
 
 ## 关闭 PDF 时的现象（与插件无关，已 A/B 验证）
 
@@ -146,3 +147,7 @@ publish.xml: <jsplugin name="WPSPDFPdf" type="pdf" url="WPSPDFPdf_1.0.0" version
 ## 许可
 
 自有项目，按需自用。参考实现 LocalReadTranslate 为独立开源项目，本项目未复制其代码，仅按其公开记录校正了 WPS PDF 加载项的注册方式。
+
+15. **页面无法创建进程时的正解是「轻量加载器」**：页面只能发 HTTP，所以需要一个只做标准库、
+    不加载模型的本地小服务（本项目 `engine/loader.py`，27 MB）来替它创建进程。
+    这层是参考实现同样要付的成本；不想付就走零常驻入口（右键菜单 / 快捷方式）。
