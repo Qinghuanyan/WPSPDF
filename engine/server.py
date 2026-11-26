@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 
 APP = "WPSPDF"
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 ROOT = Path(__file__).resolve().parent.parent
 RUNDIR = ROOT / ".run"
 OUTDIR = ROOT / "output"
@@ -344,8 +344,34 @@ def pick_port(preferred: int) -> int:
         return s.getsockname()[1]
 
 
+WPS_IMAGES = {"wpsoffice.exe", "wpspdf.exe", "et.exe", "wpp.exe", "wps.exe"}
+
+
+def wps_running() -> bool:
+    """WPS 任一组件在跑 → 宿主活着，引擎就该活着。
+
+    加载项页面与 ribbon.xml 都靠本引擎 http 托管：引擎提前退出，WPS 再打开 PDF 时
+    取不到 ribbon.xml 就**不出页签**（2026-11-26 实机表现：页签时有时无）。
+    所以生存期改为「跟随 WPS」：WPS 全关掉之后才开始算空闲。
+    """
+    try:
+        import psutil
+        for p in psutil.process_iter(["name"]):
+            if (p.info.get("name") or "").lower() in WPS_IMAGES:
+                return True
+        return False
+    except Exception:
+        pass
+    try:
+        out = subprocess.run(["tasklist", "/NH"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace").stdout.lower()
+        return any(n in out for n in WPS_IMAGES)
+    except Exception:
+        return False
+
+
 def watchdog(server):
-    """无请求且无任务 → 自行退出（WPS 关掉后自然静默）。"""
+    """WPS 还在跑就常驻；WPS 全关后空闲到点退出。"""
     while True:
         time.sleep(20)
         with JOBS_LOCK:
@@ -353,6 +379,8 @@ def watchdog(server):
         if running:
             continue
         if IDLE_TIMEOUT <= 0:
+            continue
+        if wps_running():
             continue
         if time.time() - LAST_SEEN > IDLE_TIMEOUT:
             try:

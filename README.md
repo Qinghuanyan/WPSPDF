@@ -55,13 +55,18 @@ tools\uninstall.ps1
 安装前状态会记录到 `evidence/install-pre-*.json`，卸载后 `jsaddons` 回到安装前状态。
 **不写注册表、不改 WPS 安装目录、不动用户文件。**
 
-## 引擎生命周期
+## 引擎生命周期（跟随 WPS）
 
 - 只监听 `127.0.0.1`，端口 38731 起，被占用自动顺延（加载项按 38731–38734 探测）
-- **空闲自动退出**：默认 300 秒；优先级 `WPSPDF_IDLE_TIMEOUT`（环境变量）> `.run/idle_timeout`（写秒数）> 300；写 `0` 表示常驻
-- 加载项页面每 1.2 秒轮询 `/cmd` 会持续保活 → **WPS 开着时不会退出**；WPS 关掉后到点自动退出
+- **生存期跟随 WPS**：只要 `wpsoffice/wpspdf/et/wpp` 任一进程在跑就常驻；
+  WPS 全部关掉后才开始算空闲，再按超时退出（默认 300 秒，`WPSPDF_IDLE_TIMEOUT` / `.run/idle_timeout` 可改，`0`=常驻）
+- **为什么必须这样**：加载项的 `ribbon.xml` / 页面都是本引擎 http 托管的。
+  引擎提前退出 → WPS 再打开 PDF 取不到 `ribbon.xml` → **页签直接不出现**（2026-11-26 实测的「时有时无」就是这个）
+- 开机自启：`tools/autostart.ps1 -Action register`（HKCU Run 跑 `engine-silent.vbs`，静默无黑窗）。
+  **未注册自启时，WPS 先于引擎启动的那次就打不开页签**；可用 `tools/start-engine.bat` 手工补
 - 常驻时占用约 51 MB 内存、空闲 CPU ≈0
-- 加载项页面加载时会尝试 `OAAssist.ShellExecute` 拉起 `tools/engine-silent.vbs`（静默，无黑窗）
+- 加载项**不再**尝试用 `wps.OAAssist.ShellExecute` 拉起引擎：WPS 个人版静默拦截该调用，
+  在 PDF 宿主里反复调用会把窗口拖到卡死（见关键技术点 11）
 
 ## 关键技术点（都是踩过的坑）
 
@@ -78,6 +83,11 @@ tools\uninstall.ps1
 9. **`text_score` 默认 0.5 会吃掉正确的短文本**（如「恒我」整页分 0.40），降到 0.35 + 低分标黄。
 10. **判「格里有墨」必须内缩 1.5pt**：不内缩会把格子 1px 边框当墨，空格全变假阳性；
     单元格级补救的留白要试 `pad=2.0/0/3.0`，贴边常被判无文本。
+11. **PDF 宿主里绝不能反复调 `wps.OAAssist.ShellExecute`**：WPS 个人版静默拦截该调用，
+    同步进宿主内部会把 PDF 窗口拖到卡死（2026-11-26 实测：引擎空闲退出后旧版每 15 秒调一次，窗口冻死）。
+    页面改为「失败只退避、不拉起进程」，并且**不要用同步 XHR**（`xhr.open(...,false)` 在 CEF 后台页会被拦）。
+12. **`增值服务` 是 WPS 自带页签**，第三方加载项无法往里插按钮；只能并列一个自己的页签
+    （实测页签行为 `阅读 | 增值服务 | PDF转表格`）。
 
 ## 已知限制
 

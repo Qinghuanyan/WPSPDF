@@ -100,3 +100,19 @@
 - 实测约束：WPS 个人版**拦截加载项启动外部进程**——`wps.OAAssist.ShellExecute` 四种形式均返回 OK 但不执行；`CoCreateInstance("WScript.Shell")` 报 `can not create`。故“页签里点按钮起进程”不可行。
 - 落地：`tools/engine-silent.vbs`（静默启动）+ 桌面/开始菜单快捷方式 + HKCU Run 自启 + `stop-engine.bat`。
 - 状态：done
+
+## REQ-017 — 页签必须始终出现，不能「时有时无」（用户 2026-11-26 追加）
+- 时间：2026-11-26
+- 描述：打开 PDF 时页签行应稳定出现「PDF转表格」；不能因为引擎空闲退出而消失。
+- 验收：引擎不在时 WPS 打开 PDF，页签仍应出现；或引擎在 WPS 运行期间常驻保证可取到 `ribbon.xml`。
+- 根因：`ribbon.xml`/页面由引擎 http 托管，引擎 300s 空闲退出后 WPS 取不到 `ribbon.xml` → 无页签；
+  且 HKCU Run 实际**未注册**自启。
+- 状态：**done**（引擎生存期改为跟随 WPS 进程 + 补注册自启；实测页签行 `阅读 | 增值服务 | PDF转表格`）
+
+## REQ-018 — 加载项不得拖死 WPS（用户 2026-11-26 追加）
+- 时间：2026-11-26
+- 描述：加载项在引擎不可达时不得阻塞宿主；PDF 窗口不得卡死。
+- 验收：引擎停止后打开 PDF 并等待 60 秒，窗口仍可交互；页面只上报 `engine-down`，不重复尝试拉起进程。
+- 根因：旧 `poll.js` 每 15s 调 `wps.OAAssist.ShellExecute`（WPS 个人版静默拦截，同步调用拖死 UI）；
+  `util.js` 另有同步 XHR 死代码。
+- 状态：**done**（删除自动拉起 + 指数退避 + 循环单例 + 去同步 XHR）
