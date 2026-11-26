@@ -55,7 +55,9 @@ tools\uninstall.ps1
 ## 引擎生命周期
 
 - 只监听 `127.0.0.1`，端口 38731 起，被占用自动顺延（加载项按 38731–38734 探测）
-- **无请求且无进行中任务时，10 分钟自动退出**（`WPSPDF_IDLE_TIMEOUT` 可调）
+- **空闲自动退出**：默认 300 秒；优先级 `WPSPDF_IDLE_TIMEOUT`（环境变量）> `.run/idle_timeout`（写秒数）> 300；写 `0` 表示常驻
+- 加载项页面每 1.2 秒轮询 `/cmd` 会持续保活 → **WPS 开着时不会退出**；WPS 关掉后到点自动退出
+- 常驻时占用约 51 MB 内存、空闲 CPU ≈0
 - 加载项页面加载时会尝试 `OAAssist.ShellExecute` 拉起 `tools/engine-silent.vbs`（静默，无黑窗）
 
 ## 关键技术点（都是踩过的坑）

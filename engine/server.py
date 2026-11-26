@@ -36,7 +36,24 @@ STATIC_ROOTS = {
     "/pdf/": ROOT / "addon-pdf",
     "/images/": ROOT / "addon-pdf" / "images",
 }
-IDLE_TIMEOUT = float(os.environ.get("WPSPDF_IDLE_TIMEOUT", "0"))  # 秒；0 = 常驻不退出
+def _idle_timeout() -> float:
+    """空闲多久自动退出（秒）。优先级：环境变量 > .run/idle_timeout > 300；0 = 常驻。"""
+    env = os.environ.get("WPSPDF_IDLE_TIMEOUT")
+    if env not in (None, ""):
+        try:
+            return float(env)
+        except ValueError:
+            pass
+    cfg = RUNDIR / "idle_timeout"
+    try:
+        if cfg.exists():
+            return float(cfg.read_text(encoding="utf-8").strip())
+    except Exception:
+        pass
+    return 300.0
+
+
+IDLE_TIMEOUT = _idle_timeout()
 
 START_TS = time.time()
 JOBS: dict[str, dict] = {}
